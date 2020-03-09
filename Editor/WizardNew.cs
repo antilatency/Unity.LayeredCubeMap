@@ -3,11 +3,11 @@ using UnityEngine;
 using System.IO;
 using UnityEditor.SceneManagement;
 
-namespace Antilatency {
-    public class LayeredCubeMap : ScriptableWizard {
+namespace Antilatency.LayeredCubeMap {
+    public class WizardNew : ScriptableWizard {
 
         public InspectorButton SelectDirectory_;
-        public void SelectDirectory() {
+        /*public void SelectDirectory() {
             string directoryCandidate = EditorUtility.OpenFolderPanel("Select folder for new scene.", Application.dataPath, "");
             if (directoryCandidate.StartsWith(Application.dataPath)) {
                 directory = directoryCandidate.Substring(Application.dataPath.Length).TrimStart(new char[] { '/', '\\' });
@@ -17,16 +17,20 @@ namespace Antilatency {
                 }
             }
             OnWizardUpdate();
-        }
+        }*/
 
-        public string directory = "";
-        public string sceneName = "Scene";
+        public string sceneName = "";
         public Cubemap cubemap;
 
 
-        public string scenePath { 
+        public Utils.UnityPath scenePath { 
             get{
-                return Path.Combine(Application.dataPath, directory, sceneName + ".unity");
+                return new Utils.UnityPath(Path.Combine("Assets",sceneName, sceneName + ".unity"));
+            }
+        }
+        public Utils.UnityPath sceneDirectory {
+            get {
+                return new Utils.UnityPath(Path.Combine("Assets", sceneName));
             }
         }
 
@@ -37,7 +41,7 @@ namespace Antilatency {
 
         [MenuItem("Antilatency/LayeredCubeMap/New")]
         public static void CreateWizard() {
-            ScriptableWizard.DisplayWizard<LayeredCubeMap>("New LayeredCubeMap scene", "Create");
+            ScriptableWizard.DisplayWizard<WizardNew>("New LayeredCubeMap scene", "Create");
             //If you don't want to use the secondary button simply leave it out:
             //ScriptableWizard.DisplayWizard<WizardCreateLight>("Create Light", "Create");
         }
@@ -45,19 +49,32 @@ namespace Antilatency {
         
 
         void OnWizardCreate() {
+
+            PlayerSettings.colorSpace = ColorSpace.Linear;
+            //var sceneDirectory = Utils.GetCurrentSceneDirectory().ToAbsolute();
+            if (!Directory.Exists(sceneDirectory.ToAbsolute())) {
+                Directory.CreateDirectory(sceneDirectory.ToAbsolute());
+            }
+
             var shader = Shader.Find("Antilatency/Skybox/CubemapProjection");
             var material = new Material(shader);
             material.mainTexture = cubemap;
-            AssetDatabase.CreateAsset(material, Path.Combine("Assets", directory, "Sky.mat"));
+            AssetDatabase.CreateAsset(material, Path.Combine("Assets", sceneName, $"{sceneName}Sky.mat"));
 
             var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             newScene.name = sceneName;
             RenderSettings.skybox = material;
 
             
+            Directory.CreateDirectory(Path.Combine(sceneDirectory.ToAbsolute(), Patch.PatchesDirectoryName));
+
+            GameObject layeredCubeMapControl = new GameObject("LayeredCubeMapControl");
+            layeredCubeMapControl.AddComponent<SkyControl>();
+
+            EditorSceneManager.SaveScene(newScene, scenePath.ToString());
 
 
-            EditorSceneManager.SaveScene(newScene, scenePath);
+
             AssetDatabase.Refresh(); 
             
 
@@ -65,19 +82,18 @@ namespace Antilatency {
 
         bool checkIfValid() {
             if (string.IsNullOrEmpty(sceneName)) {
-                helpString = " set Scene Name";
+                helpString = " set Name";
                 return false;
             }
 
-
-            if (File.Exists(scenePath)) {
+            if (File.Exists(scenePath.ToAbsolute())) {
                 helpString = scenePath + " already exists";
                 return false;
             }
-            /*if (!cubemap) {
+            if (!cubemap) {
                 helpString = "select cubemap";
                 return false;
-            }*/
+            }
 
 
             helpString = "";
