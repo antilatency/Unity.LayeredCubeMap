@@ -16,90 +16,89 @@
 
 using System;
 
-namespace PhotoshopFile
-{
-  /// <summary>
-  /// Summary description for ResolutionInfo.
-  /// </summary>
-  public class ResolutionInfo : ImageResource
-  {
-    public override ResourceID ID => ResourceID.ResolutionInfo;
-
+namespace PhotoshopFile {
     /// <summary>
-    /// Horizontal DPI.
+    /// Summary description for ResolutionInfo.
     /// </summary>
-    public UFixed16_16 HDpi { get; set; }
+    public class ResolutionInfo : ImageResource {
+        public override ResourceID ID => ResourceID.ResolutionInfo;
 
-    /// <summary>
-    /// Vertical DPI.
-    /// </summary>
-    public UFixed16_16 VDpi { get; set; }
+        /// <summary>
+        /// Horizontal DPI.
+        /// </summary>
+        public UFixed16_16 HDpi { get; set; }
 
-    /// <summary>
-    /// 1 = pixels per inch, 2 = pixels per centimeter
-    /// </summary>
-    public enum ResUnit
-    {
-      PxPerInch = 1,
-      PxPerCm = 2
+        /// <summary>
+        /// Vertical DPI.
+        /// </summary>
+        public UFixed16_16 VDpi { get; set; }
+
+        /// <summary>
+        /// 1 = pixels per inch, 2 = pixels per centimeter
+        /// </summary>
+        public enum ResUnit {
+            PxPerInch = 1,
+            PxPerCm = 2
+        }
+
+        /// <summary>
+        /// Display units for horizontal resolution.  This only affects the
+        /// user interface; the resolution is still stored in the PSD file
+        /// as pixels/inch.
+        /// </summary>
+        public ResUnit HResDisplayUnit { get; set; }
+
+        /// <summary>
+        /// Display units for vertical resolution.
+        /// </summary>
+        public ResUnit VResDisplayUnit { get; set; }
+
+        /// <summary>
+        /// Physical units.
+        /// </summary>
+        public enum Unit {
+            Inches = 1,
+            Centimeters = 2,
+            Points = 3,
+            Picas = 4,
+            Columns = 5
+        }
+
+        public Unit WidthDisplayUnit { get; set; }
+
+        public Unit HeightDisplayUnit { get; set; }
+
+        public ResolutionInfo() : base(String.Empty) {
+            HeightDisplayUnit = ResolutionInfo.Unit.Columns;
+            WidthDisplayUnit = ResolutionInfo.Unit.Inches;
+            HResDisplayUnit = ResolutionInfo.ResUnit.PxPerInch;
+            VResDisplayUnit = ResolutionInfo.ResUnit.PxPerInch;
+            HDpi = new UFixed16_16(72);
+            VDpi = new UFixed16_16(72);
+        }
+
+        public ResolutionInfo(PsdBinaryReader reader, string name)
+          : base(name) {
+            this.HDpi = new UFixed16_16(reader.ReadUInt32());
+            this.HResDisplayUnit = (ResUnit)reader.ReadInt16();
+            this.WidthDisplayUnit = (Unit)reader.ReadInt16();
+
+            this.VDpi = new UFixed16_16(reader.ReadUInt32());
+            this.VResDisplayUnit = (ResUnit)reader.ReadInt16();
+            this.HeightDisplayUnit = (Unit)reader.ReadInt16();
+        }
+
+        protected override void WriteData(PsdBinaryWriter writer) {
+            writer.Write(HDpi.Integer);
+            writer.Write(HDpi.Fraction);
+            writer.Write((Int16)HResDisplayUnit);
+            writer.Write((Int16)WidthDisplayUnit);
+
+            writer.Write(VDpi.Integer);
+            writer.Write(VDpi.Fraction);
+            writer.Write((Int16)VResDisplayUnit);
+            writer.Write((Int16)HeightDisplayUnit);
+        }
+
     }
-
-    /// <summary>
-    /// Display units for horizontal resolution.  This only affects the
-    /// user interface; the resolution is still stored in the PSD file
-    /// as pixels/inch.
-    /// </summary>
-    public ResUnit HResDisplayUnit { get; set; }
-
-    /// <summary>
-    /// Display units for vertical resolution.
-    /// </summary>
-    public ResUnit VResDisplayUnit { get; set; }
-
-    /// <summary>
-    /// Physical units.
-    /// </summary>
-    public enum Unit
-    {
-      Inches = 1,
-      Centimeters = 2,
-      Points = 3,
-      Picas = 4,
-      Columns = 5
-    }
-
-    public Unit WidthDisplayUnit { get; set; }
-
-    public Unit HeightDisplayUnit { get; set; }
-    
-    public ResolutionInfo() : base(String.Empty)
-    {
-    }
-
-    public ResolutionInfo(PsdBinaryReader reader, string name)
-      : base(name)
-    {
-      this.HDpi = new UFixed16_16(reader.ReadUInt32());
-      this.HResDisplayUnit = (ResUnit)reader.ReadInt16();
-      this.WidthDisplayUnit = (Unit)reader.ReadInt16();
-
-      this.VDpi = new UFixed16_16(reader.ReadUInt32());
-      this.VResDisplayUnit = (ResUnit)reader.ReadInt16();
-      this.HeightDisplayUnit = (Unit)reader.ReadInt16();
-    }
-
-    protected override void WriteData(PsdBinaryWriter writer)
-    {
-      writer.Write(HDpi.Integer);
-      writer.Write(HDpi.Fraction);
-      writer.Write((Int16)HResDisplayUnit);
-      writer.Write((Int16)WidthDisplayUnit);
-
-      writer.Write(VDpi.Integer);
-      writer.Write(VDpi.Fraction);
-      writer.Write((Int16)VResDisplayUnit);
-      writer.Write((Int16)HeightDisplayUnit);
-    }
-
-  }
 }

@@ -4,14 +4,16 @@ using System.IO;
 using UnityEngine.Experimental.Rendering;
 using UnityEditor.Rendering;
 using System.Linq;
+using System.Collections.Generic;
+using PhotoshopFile;
+
 
 namespace Antilatency.LayeredCubeMap {
     [ExecuteAlways]
     //[RequireComponent(typeof(Camera))]
     [RequireComponent(typeof(RectTransform))]
     public class Patch : MonoBehaviour {
-        public static string PatchesDirectoryName => "Patches";
-        public static string PatchName => "Patch";
+        
 
         static int cubemapSize {
             get {
@@ -25,22 +27,32 @@ namespace Antilatency.LayeredCubeMap {
             Debug.Log(resourceDirectory);
         }
 
+        
+        public Utils.UnityPath directory => new Utils.UnityPath(Path.Combine(Utils.patchesDirectory.ToString(), name));
+        
+        
+        public Utils.UnityPath designFilesDirectory => new Utils.UnityPath(Path.Combine(Utils.designFilesDirectory.ToString(), name));
+        public Utils.UnityPath exrFilePath => new Utils.UnityPath(Path.Combine(designFilesDirectory.ToString(), $"{name}.exr"));
+        public Utils.UnityPath psdFilePath => new Utils.UnityPath(Path.Combine(designFilesDirectory.ToString(), $"{name}.psd"));
+
 
         public static string GetUniqueName() {
-            var path = Path.Combine(Utils.GetCurrentSceneDirectory().ToAbsolute(), PatchesDirectoryName);
-            var directories = Directory.GetDirectories(path).Select(x => Path.GetFileName(x)).ToList();
+            var directories = Directory.GetDirectories(Utils.patchesDirectory.ToAbsolute()).Select(x => Path.GetFileName(x)).ToList();
             int index = 0;
-            while (directories.Contains(PatchName + index.ToString("D4"))) {
+            while (directories.Contains(Utils.patchName + index.ToString("D4"))) {
                 index++;
             }
-            return PatchName + index.ToString("D4");
+            return Utils.patchName + index.ToString("D4");
         }
 
-        public Utils.UnityPath resourceDirectory => new Utils.UnityPath(Path.Combine(Utils.GetCurrentSceneDirectory().ToString(), PatchesDirectoryName, name));
+        public Utils.UnityPath resourceDirectory => new Utils.UnityPath(Path.Combine(Utils.currentSceneDirectory.ToString(), Utils.patchesDirectoryName, name));
 
         [MenuItem("Antilatency/LayeredCubeMap/Create patch &p")]
         public static void Create() {
             var name = GetUniqueName();
+            //Directory.CreateDirectory()
+
+
             var patch = new GameObject(name, typeof(RectTransform), typeof(ShowRectTransform),typeof(Patch));
             var camera = new GameObject("Camera", typeof(Camera));
             camera.transform.parent = patch.transform;
@@ -123,6 +135,12 @@ namespace Antilatency.LayeredCubeMap {
                 Debug.LogError(resourceDirectory.ToString() + " Directory does not exist.");
                 return;
             }
+            if (!Directory.Exists(Utils.designFilesDirectory.ToAbsolute())){
+                Directory.CreateDirectory(Utils.designFilesDirectory.ToAbsolute());
+            }
+            if (!Directory.Exists(designFilesDirectory.ToAbsolute())) {
+                Directory.CreateDirectory(designFilesDirectory.ToAbsolute());
+            }
 
             var rectTransform = GetComponent<RectTransform>();
             Vector2 size = rectTransform.sizeDelta * cubemapSize;
@@ -140,17 +158,26 @@ namespace Antilatency.LayeredCubeMap {
             texture.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
             RenderTexture.active = null;
 
-            PhotoshopFile.PsdFile output = new PhotoshopFile.PsdFile(PhotoshopFile.PsdFileVersion.Psd);
+            /*PhotoshopFile.PsdFile output = new PhotoshopFile.PsdFile(PhotoshopFile.PsdFileVersion.Psd);
             output.RowCount = renderTexture.height;
             output.ColumnCount = renderTexture.width;
+            output.ChannelCount = 4;
+            output.ColorMode = PhotoshopFile.PsdColorMode.RGB;
             output.BitDepth = 32;
-            output.Layers.Add(new PhotoshopFile.Layer(output));
-            output.PrepareSave();
-            output.Save(Path.Combine(resourceDirectory.ToAbsolute(), $"{name}.psd"),System.Text.Encoding.UTF8);
+            output.ImageCompression = PhotoshopFile.ImageCompression.Raw;
 
-            /*var bytes = texture.EncodeToEXR(Texture2D.EXRFlags.OutputAsFloat);
-            var outputPath = Path.Combine(Application.dataPath,"patch.exr");
-            File.WriteAllBytes(outputPath, bytes);*/
+
+            output.Resolution = new PhotoshopFile.ResolutionInfo();
+            var layer = new PhotoshopFile.Layer(output);
+            layer.CreateMissingChannels();
+            output.Layers.Add(layer);
+
+            output.PrepareSave();
+            output.Save(Path.Combine(resourceDirectory.ToAbsolute(), $"{name}.psd"),System.Text.Encoding.UTF8);*/
+
+            var bytes = texture.EncodeToEXR(Texture2D.EXRFlags.OutputAsFloat);
+            var outputPath = exrFilePath.ToAbsolute();
+            File.WriteAllBytes(outputPath, bytes);
 
             AssetDatabase.Refresh();
             //Debug.Log(rectTransform.sizeDelta * cubemapSize);
@@ -158,10 +185,135 @@ namespace Antilatency.LayeredCubeMap {
 
         public InspectorButton Edit_;
         public void Edit() {
-            
+            if (File.Exists(psdFilePath.ToAbsolute())) {
+                System.Diagnostics.Process.Start(psdFilePath.ToAbsolute());
+            } else {
+                if (File.Exists(exrFilePath.ToAbsolute())) {
+                    System.Diagnostics.Process.Start(exrFilePath.ToAbsolute());
+                } else {
+                    if (EditorUtility.DisplayDialog("File not found", $"{exrFilePath} does not exist. Click Render first.", "Render", "Cancel")) {
+                        Render();
+                        Edit();
+                    }                    
+                }
+            }            
         }
 
+        public InspectorButton Import_;
+        public void Import() {
+            PsdFile input = new PsdFile(psdFilePath.ToAbsolute(), new LoadContext());
+            var layersForImport = input.Layers;
 
+
+            if (!(layersForImport.Select(x => x.Name).Distinct().Count() == layersForImport.Count())) {
+                if (EditorUtility.DisplayDialog("Duplicated layer name", $"Rename layers to be unique.", "Edit", "Cancel")) {
+                    Edit();
+                } else {
+                    return;
+                }
+            };
+
+            var existingFiles = Directory.EnumerateFiles(resourceDirectory.ToAbsolute(), "*.*", SearchOption.TopDirectoryOnly)
+            .Where(s => s.EndsWith(".asset") || s.EndsWith(".mat"))
+            .Select(x=>Path.GetFileName(x)).ToList();
+
+
+            int imageW = input.ColumnCount;
+            int imageH = input.RowCount;
+            foreach (var l in layersForImport) {
+                Color[] pixels = Enumerable.Repeat(new Color(0.5f, 0.5f, 0.5f, 0) , imageW* imageH).ToArray();
+
+                foreach (var c in l.Channels) {
+                    var w = c.Rect.Width;
+                    var h = c.Rect.Height;
+                    var x0 = c.Rect.X;
+                    var y0 = c.Rect.Y;
+
+                    
+                    int rp = 0;
+                    int channelID = c.ID;
+                    switch (channelID) {
+                        case -1: {
+                                float[] values = new float[w * h];
+                                System.Buffer.BlockCopy(c.ImageData, 0, values, 0, c.ImageData.Length);
+                                for (int y = y0; y < y0 + h; y++) {
+                                    for (int x = x0; x < x0 + w; x++) {
+                                        pixels[(imageH - y - 1) * imageW + x].a = values[rp];
+                                        rp++;
+                                    }
+                                }
+                            }
+                            break;
+                        case 0:
+                        case 1:
+                        case 2: {
+                                float[] values = new float[w * h];
+                                System.Buffer.BlockCopy(c.ImageData, 0, values, 0, c.ImageData.Length);
+                                for (int y = y0; y < y0 + h; y++) {
+                                    for (int x = x0; x < x0 + w; x++) {
+                                        pixels[(imageH - y - 1) * imageW + x][channelID] = values[rp];
+                                        rp++;
+                                    }
+                                }
+                            }
+                            break;
+                    }
+                }
+                
+
+                if (l.Masks.LayerMask != null) {
+                    var m = l.Masks.LayerMask;                   
+
+                    float[] values = new float[m.Rect.Width * m.Rect.Height];
+                    System.Buffer.BlockCopy(m.ImageData, 0, values, 0, m.ImageData.Length);
+                    int rp = 0;
+                    var w = m.Rect.Width;
+                    var h = m.Rect.Height;
+                    var x0 = m.Rect.X;
+                    var y0 = m.Rect.Y;
+
+                    float b = l.Masks.LayerMask.BackgroundColor / 255.0f;
+                    var maskPixels = Enumerable.Repeat(b, imageW * imageH).ToArray();
+
+                    for (int y = y0; y < y0 + h; y++) {
+                        for (int x = x0; x < x0 + w; x++) {
+                            maskPixels[(imageH - y - 1) * imageW + x] = values[rp];
+                            rp++;
+                        }
+                    }
+                    for (int i = 0; i < imageH * imageW; i++)
+                        pixels[i].a *= maskPixels[i];
+                }
+
+                string textureName = $"{name}_{l.Name}.asset";
+                string materialName = $"{name}_{l.Name}.mat";
+                string texturePath = Path.Combine(resourceDirectory.ToString(), textureName);
+                string materialPath = Path.Combine(resourceDirectory.ToString(), materialName);
+                existingFiles.Remove(textureName);
+                existingFiles.Remove(materialName);
+
+                CreateTextureAndMaterial(pixels, imageW, imageH, texturePath, materialPath);
+
+                
+
+            }
+
+            foreach (var f in existingFiles) {
+                string path = Path.Combine(resourceDirectory.ToString(), f);
+                AssetDatabase.DeleteAsset(path);
+            }
+
+            AssetDatabase.Refresh();
+        }
+
+        void CreateTextureAndMaterial(Color[] pixels, int w, int h, string texturePath, string materialPath) {
+            Texture2D output = new Texture2D(w, h, GraphicsFormat.R32G32B32A32_SFloat, TextureCreationFlags.None);
+            output.wrapMode = TextureWrapMode.Clamp;
+            output.SetPixels(pixels);
+
+            AssetDatabase.CreateAsset(output, texturePath);
+            AssetDatabase.ImportAsset(texturePath);
+        } 
 
         void Update() {
             fixPosition();

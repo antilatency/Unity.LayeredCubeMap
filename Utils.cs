@@ -25,15 +25,28 @@ namespace Antilatency.LayeredCubeMap {
             public override string ToString() {
                 return value;
             }
+
         }
 
-        public static UnityPath GetCurrentScenePath() {
-            return new UnityPath(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
-        }
+        public static string patchesDirectoryName => "Patches";
+        public static string patchName => "Patch";
+        public static string layeredCubeMapName => "LayeredCubeMap";
 
-        public static UnityPath GetCurrentSceneDirectory() {
-            return new UnityPath(Path.GetDirectoryName(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path));
-        }
+        public static Utils.UnityPath patchesDirectory => new Utils.UnityPath(Path.Combine(Utils.currentSceneDirectory.ToAbsolute(), patchesDirectoryName));
+        
+        public static Utils.UnityPath designFilesDirectory => new Utils.UnityPath(Path.Combine( "LayeredCubeMap", currentSceneName));
+
+        public static string currentSceneName =>
+            Path.GetFileNameWithoutExtension(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        
+
+        public static UnityPath currentScenePath =>
+            new UnityPath(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        
+
+        public static UnityPath currentSceneDirectory =>
+            new UnityPath(Path.GetDirectoryName(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path));
+        
         
     }
 }

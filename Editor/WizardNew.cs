@@ -66,7 +66,7 @@ namespace Antilatency.LayeredCubeMap {
             RenderSettings.skybox = material;
 
             
-            Directory.CreateDirectory(Path.Combine(sceneDirectory.ToAbsolute(), Patch.PatchesDirectoryName));
+            Directory.CreateDirectory(Path.Combine(sceneDirectory.ToAbsolute(), Utils.patchesDirectoryName));
 
             GameObject layeredCubeMapControl = new GameObject("LayeredCubeMapControl");
             layeredCubeMapControl.AddComponent<SkyControl>();

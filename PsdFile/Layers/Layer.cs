@@ -110,6 +110,9 @@ namespace PhotoshopFile {
             BlendModeKey = PsdBlendMode.Normal;
             AdditionalInfo = new List<LayerInfo>();
 
+            Masks = new MaskInfo();
+            BlendingRangesData = new BlendingRanges(this);
+            Name = "Layer0";
         }
 
         internal Layer(PsdBinaryReader reader, PsdFile psdFile)
