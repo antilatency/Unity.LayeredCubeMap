@@ -3,8 +3,9 @@
     Properties
     {
 		_MainTex("Cubemap", CUBE) = "" {}
-        Horizon("Horizon", Float) = 0
+        _ShowHorizon("Show Horizon", Float) = 0
 		
+		_HorizonAdjustment("Horizon Adjustment", Float) = 0
 		_MatrixX("MatrixX", vector) = (1,0,0,0)
 		_MatrixY("MatrixY", vector) = (0,1,0,0)
 		_MatrixZ("MatrixZ", vector) = (0,0,1,0)
@@ -29,7 +30,8 @@
 			{
 				float2 uv : TEXCOORD0;
 				float4 vertex : SV_POSITION;
-				float3 position : P;
+				float3 worldPosition : worldPosition;
+				float3 skyboxPosition : skyboxPosition;
 			};
 
 			float3 _MatrixX;
@@ -44,19 +46,27 @@
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = v.uv;
-				o.position = mul(SkyMatrix, mul(unity_ObjectToWorld, v.vertex));
+				o.worldPosition = mul(unity_ObjectToWorld, v.vertex);
+				o.skyboxPosition = mul(SkyMatrix, o.worldPosition);
 				return o;
 			}
 
 			samplerCUBE _MainTex;
-			float Horizon;
+			float _ShowHorizon;
+			float _HorizonAdjustment;
 			float4 frag(v2f i) : SV_Target
 			{
+				
+				float3 skyboxPosition = normalize(i.skyboxPosition);
 
-				float3 n = normalize(i.position);
-				float4 color = texCUBE(_MainTex, n);
+				float r = length(skyboxPosition.xz);
+				skyboxPosition.y += _HorizonAdjustment * r;
 
-				color = lerp(color,1,abs(n.y) < Horizon);
+				float4 color = texCUBE(_MainTex, skyboxPosition);
+
+				float3 worldPosition = normalize(i.worldPosition);
+				
+				color = lerp(color,1,abs(worldPosition.y) < _ShowHorizon);
 
 				return color;
 			}
