@@ -4,6 +4,11 @@ using UnityEditor;
 namespace Antilatency {
     [ExecuteAlways]
     public class SkyControl : MonoBehaviour {
+
+
+        public static SkyControl instance => FindObjectOfType<SkyControl>();
+        public static Vector3 position => instance.transform.position;
+
         // Start is called before the first frame update
         void Start() {
 
@@ -24,6 +29,7 @@ namespace Antilatency {
                 RenderSettings.skybox.SetVector("_MatrixX", transform.worldToLocalMatrix.GetRow(0));
                 RenderSettings.skybox.SetVector("_MatrixY", transform.worldToLocalMatrix.GetRow(1));
                 RenderSettings.skybox.SetVector("_MatrixZ", transform.worldToLocalMatrix.GetRow(2));
+                RenderSettings.skybox.SetVector("_Origin", transform.position);
             }
         }
 
@@ -32,17 +38,12 @@ namespace Antilatency {
 
             if (e.type == EventType.MouseDown) {
                 if (e.button == 1) {
-                    scene.pivot -= scene.camera.transform.position;
+                    scene.pivot = scene.pivot - scene.camera.transform.position + transform.position;
                 }
             }
             
         }
     }
 
-    [CustomEditor(typeof(SkyControl))]
-    public class DrawLineEditor : Editor {
-        void OnSceneGUI() {
-            
-        }
-    }
+
 }

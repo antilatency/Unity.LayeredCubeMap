@@ -9,6 +9,7 @@
 		_MatrixX("MatrixX", vector) = (1,0,0,0)
 		_MatrixY("MatrixY", vector) = (0,1,0,0)
 		_MatrixZ("MatrixZ", vector) = (0,0,1,0)
+		_Origin("Origin", vector) = (0,0,1,0)
     }
     SubShader
     {
@@ -37,7 +38,7 @@
 			float3 _MatrixX;
 			float3 _MatrixY;
 			float3 _MatrixZ;
-
+			float3 _Origin;
 			v2f vert(appdata v)
 			{
 				
@@ -46,7 +47,7 @@
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = v.uv;
-				o.worldPosition = mul(unity_ObjectToWorld, v.vertex);
+				o.worldPosition = mul(unity_ObjectToWorld, v.vertex) - _Origin;
 				o.skyboxPosition = mul(SkyMatrix, o.worldPosition);
 				return o;
 			}

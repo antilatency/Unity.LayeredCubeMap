@@ -15,6 +15,7 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
@@ -70,25 +71,39 @@ namespace PhotoshopFile {
         /// </summary>
         public bool Clipping { get; set; }
 
-        private static int protectTransBit = BitVector32.CreateMask();
-        private static int visibleBit = BitVector32.CreateMask(protectTransBit);
-        BitVector32 flags = new BitVector32();
+        //private static int protectTransBit = BitVector32.CreateMask();
+        //private static int visibleBit = BitVector32.CreateMask(protectTransBit);
 
-        /// <summary>
-        /// If true, the layer is visible.
-        /// </summary>
+
+        /*
+        bit 0 = transparency protected;
+        bit 1 = visible;
+        bit 2 = obsolete;
+        bit 3 = 1 for Photoshop 5.0 and later, tells if bit 4 has useful information;
+        bit 4 = pixel data irrelevant to appearance of document
+        */
+        BitArray flags = new BitArray(new byte[] { 0 });
+        public bool TransparencyProtected {
+            get => flags[0];
+            set => flags[0] = value;
+        }
         public bool Visible {
-            get => !flags[visibleBit];
-            set => flags[visibleBit] = !value;
+            get => !flags[1];
+            set => flags[1] = !value;
         }
 
-        /// <summary>
-        /// Protect the transparency
-        /// </summary>
-        public bool ProtectTrans {
-            get => flags[protectTransBit];
-            set => flags[protectTransBit] = value;
+        public bool PixelDataIrrelevantToAppearanceOfDocument {
+            get {
+                if (!flags[3]) return false;
+                return flags[4];
+            }
+            set {
+                flags[4] = value;
+                flags[3] = true;
+            }
         }
+
+
 
         /// <summary>
         /// The descriptive layer name
@@ -142,7 +157,10 @@ namespace PhotoshopFile {
             Clipping = reader.ReadBoolean();
 
             var flagsByte = reader.ReadByte();
-            flags = new BitVector32(flagsByte);
+            //new BitVector32(flagsByte);
+
+
+            flags = new BitArray(new byte[] { flagsByte }); 
             reader.ReadByte(); //padding
 
             //-----------------------------------------------------------------------
@@ -249,7 +267,11 @@ namespace PhotoshopFile {
             writer.Write(Opacity);
             writer.Write(Clipping);
 
-            writer.Write((byte)flags.Data);
+
+            byte[] flagsByte = new byte[1];
+            flags.CopyTo(flagsByte,0);
+
+            writer.Write(flagsByte[0]);
             writer.Write((byte)0);
 
             //-----------------------------------------------------------------------

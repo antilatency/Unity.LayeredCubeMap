@@ -38,11 +38,20 @@ namespace Antilatency.LayeredCubeMap {
 
         public static string GetUniqueName() {
             var directories = Directory.GetDirectories(Utils.patchesDirectory.ToAbsolute()).Select(x => Path.GetFileName(x)).ToList();
+            var patches = SkyControl.instance.GetComponentsInChildren<Patch>().Select(x => x.name).ToList();
+
             int index = 0;
-            while (directories.Contains(Utils.patchName + index.ToString("D4"))) {
+
+            while (true) {
+                var n = Utils.patchName + index.ToString("D4");
+                bool d = directories.Contains(n);
+                bool g = patches.Contains(n);
+                if (!(d | g)) {
+                    return n;
+                }
                 index++;
             }
-            return Utils.patchName + index.ToString("D4");
+            //return Utils.patchName + index.ToString("D4");
         }
 
         public Utils.UnityPath resourceDirectory => new Utils.UnityPath(Path.Combine(Utils.currentSceneDirectory.ToString(), Utils.patchesDirectoryName, name));
@@ -54,8 +63,11 @@ namespace Antilatency.LayeredCubeMap {
 
 
             var patch = new GameObject(name, typeof(RectTransform), typeof(ShowRectTransform),typeof(Patch));
+            patch.transform.SetParent(SkyControl.instance.transform,false);
+
             var camera = new GameObject("Camera", typeof(Camera));
             camera.transform.parent = patch.transform;
+
             var viewRectTransform = patch.GetComponent<RectTransform>();
             viewRectTransform.sizeDelta = new Vector2(1, 1); // = new Rect(-0.5f, -0.5f, 1, 1);
             patch.GetComponent<Patch>().AlignToView();
@@ -65,6 +77,7 @@ namespace Antilatency.LayeredCubeMap {
         
         public InspectorButton AlignToView_;
         public void AlignToView() {
+            Undo.RecordObject(transform, "AlignToView");
             transform.rotation = SceneView.lastActiveSceneView.camera.transform.rotation;
             fixPosition();
 
@@ -98,23 +111,28 @@ namespace Antilatency.LayeredCubeMap {
 
         public InspectorButton AlignToNearestAxis_;
         public void AlignToNearestAxis() {
+            Undo.RecordObject(transform, "AlignToNearestAxis");
             var direction = transform.forward;
             int side = directionToSide(direction);
             transform.rotation = sideRotation(side);
 
             fixPosition();
-            var p = transform.position;
+            var p = transform.localPosition;
             for (int i = 1; i < 3; i++) {
                 p[(side + i) % 3] = Mathf.Round(p[(side + i) % 3] * cubemapSize) / cubemapSize;
             }
-            transform.position = p;
+            transform.localPosition = p;
 
             
         }
 
         void fixPosition() {
+            var origin = transform.parent.position;
             var forward = transform.forward;
-            transform.position = transform.position - forward * (Vector3.Dot(transform.position, forward)) + forward;
+            float currentDistance = Vector3.Dot(transform.position - origin, forward);
+
+
+            transform.position = transform.position - forward * currentDistance + forward;
 
             var rectTransform = GetComponent<RectTransform>();
             rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -126,15 +144,17 @@ namespace Antilatency.LayeredCubeMap {
 
         }
 
-        
+        public InspectorButton Lock_;
+        public void Lock() {
+            if (!GetComponent<LockPose>()) {
+                gameObject.AddComponent<LockPose>().Update();
+            }
+        }
 
         public InspectorButton Render_;
         public void Render() {
+            Lock();
 
-            if (!Directory.Exists(resourceDirectory.ToAbsolute())) {
-                Debug.LogError(resourceDirectory.ToString() + " Directory does not exist.");
-                return;
-            }
             if (!Directory.Exists(Utils.designFilesDirectory.ToAbsolute())){
                 Directory.CreateDirectory(Utils.designFilesDirectory.ToAbsolute());
             }
@@ -175,7 +195,7 @@ namespace Antilatency.LayeredCubeMap {
             output.PrepareSave();
             output.Save(Path.Combine(resourceDirectory.ToAbsolute(), $"{name}.psd"),System.Text.Encoding.UTF8);*/
 
-            var bytes = texture.EncodeToEXR(Texture2D.EXRFlags.OutputAsFloat);
+            var bytes = ImageConversion.EncodeToEXR(texture,Texture2D.EXRFlags.OutputAsFloat);
             var outputPath = exrFilePath.ToAbsolute();
             File.WriteAllBytes(outputPath, bytes);
 
@@ -201,6 +221,18 @@ namespace Antilatency.LayeredCubeMap {
 
         public InspectorButton Import_;
         public void Import() {
+            if (!File.Exists(psdFilePath.ToAbsolute())) {
+                EditorUtility.DisplayDialog("File not found", $"{psdFilePath.ToAbsolute()} does not exist. ", "Ok");
+                return;
+                
+            }
+
+
+            if (!Directory.Exists(resourceDirectory.ToAbsolute())) {
+                Directory.CreateDirectory(resourceDirectory.ToAbsolute());
+            }
+
+
             PsdFile input = new PsdFile(psdFilePath.ToAbsolute(), new LoadContext());
             var layersForImport = input.Layers;
 
@@ -222,6 +254,9 @@ namespace Antilatency.LayeredCubeMap {
             int imageH = input.RowCount;
             foreach (var l in layersForImport) {
                 Color[] pixels = Enumerable.Repeat(new Color(0.5f, 0.5f, 0.5f, 0) , imageW* imageH).ToArray();
+                
+                if (l.PixelDataIrrelevantToAppearanceOfDocument)
+                    continue;
 
                 foreach (var c in l.Channels) {
                     var w = c.Rect.Width;
@@ -321,18 +356,15 @@ namespace Antilatency.LayeredCubeMap {
             var rectTransform = GetComponent<RectTransform>();
 
             var camera = GetComponentInChildren<Camera>();
-            camera.transform.position = Vector3.zero;
+            camera.transform.position = SkyControl.instance.transform.position;
             camera.transform.localRotation = Quaternion.identity;
 
             Vector3[] corners = new Vector3[4];
-            rectTransform.GetWorldCorners(corners);
+            rectTransform.GetWorldCorners(corners);      
 
-            var view = camera.transform.worldToLocalMatrix;            
+            var min = camera.transform.InverseTransformPoint(corners[0]);
+            var max = camera.transform.InverseTransformPoint(corners[2]);
 
-            var min = view*corners[0];
-            var max = view*corners[2];
-
-            var c = transform.InverseTransformPoint(Vector3.zero);
             camera.projectionMatrix =
                 PerspectiveOffCenter(
                 min.x, max.x,
